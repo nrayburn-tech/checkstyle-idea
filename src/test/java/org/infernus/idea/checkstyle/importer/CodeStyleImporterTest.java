@@ -4,17 +4,37 @@ import com.intellij.lang.java.JavaLanguage;
 import com.intellij.lang.xml.XMLLanguage;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.codeStyle.*;
+import com.intellij.psi.codeStyle.arrangement.match.ArrangementMatchRule;
+import com.intellij.psi.codeStyle.arrangement.match.ArrangementSectionRule;
+import com.intellij.psi.codeStyle.arrangement.match.StdArrangementEntryMatcher;
+import com.intellij.psi.codeStyle.arrangement.match.StdArrangementMatchRule;
+import com.intellij.psi.codeStyle.arrangement.model.ArrangementAtomMatchCondition;
+import com.intellij.psi.codeStyle.arrangement.model.ArrangementCompositeMatchCondition;
+import com.intellij.psi.codeStyle.arrangement.model.ArrangementMatchCondition;
+import com.intellij.psi.codeStyle.arrangement.std.StdArrangementExtendableSettings;
+import com.intellij.psi.codeStyle.arrangement.std.StdArrangementRuleAliasToken;
+import com.intellij.psi.codeStyle.arrangement.std.StdArrangementSettings;
 import com.intellij.testFramework.LightPlatformTestCase;
+import java.util.Collections;
+import java.util.List;
 import org.infernus.idea.checkstyle.CheckstyleProjectService;
 import org.infernus.idea.checkstyle.config.PluginConfiguration;
 import org.infernus.idea.checkstyle.config.PluginConfigurationBuilder;
 import org.infernus.idea.checkstyle.config.PluginConfigurationManager;
 import org.infernus.idea.checkstyle.csapi.CheckstyleInternalObject;
 import org.jetbrains.annotations.NotNull;
+import org.junit.Assert;
 
+import static com.intellij.psi.codeStyle.arrangement.std.StdArrangementTokens.EntryType.CONSTRUCTOR;
+import static com.intellij.psi.codeStyle.arrangement.std.StdArrangementTokens.EntryType.FIELD;
+import static com.intellij.psi.codeStyle.arrangement.std.StdArrangementTokens.EntryType.METHOD;
+import static com.intellij.psi.codeStyle.arrangement.std.StdArrangementTokens.Modifier.PACKAGE_PRIVATE;
+import static com.intellij.psi.codeStyle.arrangement.std.StdArrangementTokens.Modifier.PRIVATE;
+import static com.intellij.psi.codeStyle.arrangement.std.StdArrangementTokens.Modifier.PROTECTED;
+import static com.intellij.psi.codeStyle.arrangement.std.StdArrangementTokens.Modifier.PUBLIC;
+import static com.intellij.psi.codeStyle.arrangement.std.StdArrangementTokens.Modifier.STATIC;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-
 
 public class CodeStyleImporterTest
         extends LightPlatformTestCase {
@@ -570,4 +590,197 @@ public class CodeStyleImporterTest
         customSettings.PACKAGES_TO_USE_IMPORT_ON_DEMAND.copyFrom(new PackageEntryTable());
     }
 
+    public void testDeclarationOrderImporter() {
+
+        // no attributes
+        {
+            codeStyleSettings.setArrangementSettings(new StdArrangementSettings(Collections.emptyList()));
+            importConfiguration(
+                inTreeWalker(
+                    """
+                             <module name="DeclarationOrder">
+                            </module>"""
+                )
+            );
+            StdArrangementExtendableSettings actual = (StdArrangementExtendableSettings) codeStyleSettings.getArrangementSettings();
+            ArrangementMatchCondition[] expectedSectionsMatchers =
+                new ArrangementMatchCondition[] {
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(STATIC),
+                            new ArrangementAtomMatchCondition(PUBLIC))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(STATIC),
+                            new ArrangementAtomMatchCondition(PROTECTED))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(STATIC),
+                            new ArrangementAtomMatchCondition(PACKAGE_PRIVATE))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(STATIC),
+                            new ArrangementAtomMatchCondition(PRIVATE))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(PUBLIC))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(PROTECTED))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(PACKAGE_PRIVATE))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(PRIVATE))),
+                    new ArrangementAtomMatchCondition(CONSTRUCTOR),
+                    new ArrangementAtomMatchCondition(METHOD)
+                };
+
+            assertNotNull(actual);
+            assertDeclarationOrderVisibilityAlias(actual.getRuleAliases().toArray(new StdArrangementRuleAliasToken[0]));
+            assertEquals(0, actual.getGroupings().size());
+            assertDeclarationOrderSectionComments(actual.getSections());
+            assertDeclarationOrderSectionOrderType(actual.getSections());
+            ArrangementMatchCondition[] actualSectionMatchers = actual.getSections().stream()
+                .flatMap(rules -> rules.getMatchRules().stream())
+                .map(rule -> rule.getMatcher().getCondition()).toList().toArray(new ArrangementMatchCondition[0]);
+            Assert.assertArrayEquals(expectedSectionsMatchers, actualSectionMatchers);
+        }
+
+        // ignoreConstructors attribute
+        {
+            codeStyleSettings.setArrangementSettings(new StdArrangementSettings(Collections.emptyList()));
+            importConfiguration(
+                inTreeWalker(
+                    """
+                             <module name="DeclarationOrder">
+                               <property name="ignoreConstructors" value="true"/>
+                            </module>"""
+                )
+            );
+            StdArrangementExtendableSettings actual = (StdArrangementExtendableSettings) codeStyleSettings.getArrangementSettings();
+            ArrangementMatchCondition[] expectedSectionsMatchers =
+                new ArrangementMatchCondition[] {
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(STATIC),
+                            new ArrangementAtomMatchCondition(PUBLIC))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(STATIC),
+                            new ArrangementAtomMatchCondition(PROTECTED))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(STATIC),
+                            new ArrangementAtomMatchCondition(PACKAGE_PRIVATE))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(STATIC),
+                            new ArrangementAtomMatchCondition(PRIVATE))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(PUBLIC))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(PROTECTED))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(PACKAGE_PRIVATE))),
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(PRIVATE))),
+                    new ArrangementAtomMatchCondition(METHOD)
+                };
+
+            assertNotNull(actual);
+            assertDeclarationOrderVisibilityAlias(actual.getRuleAliases().toArray(new StdArrangementRuleAliasToken[0]));
+            assertEquals(0, actual.getGroupings().size());
+            assertDeclarationOrderSectionComments(actual.getSections());
+            assertDeclarationOrderSectionOrderType(actual.getSections());
+            ArrangementMatchCondition[] actualSectionMatchers = actual.getSections().stream()
+                .flatMap(rules -> rules.getMatchRules().stream())
+                .map(rule -> rule.getMatcher().getCondition()).toList().toArray(new ArrangementMatchCondition[0]);
+            Assert.assertArrayEquals(expectedSectionsMatchers, actualSectionMatchers);
+        }
+
+        // ignoreModifiers attribute
+        {
+            codeStyleSettings.setArrangementSettings(new StdArrangementSettings(Collections.emptyList()));
+            importConfiguration(
+                inTreeWalker(
+                    """
+                             <module name="DeclarationOrder">
+                               <property name="ignoreModifiers" value="true"/>
+                            </module>"""
+                )
+            );
+            StdArrangementExtendableSettings actual = (StdArrangementExtendableSettings) codeStyleSettings.getArrangementSettings();
+            ArrangementMatchCondition[] expectedSectionsMatchers =
+                new ArrangementMatchCondition[] {
+                    new ArrangementCompositeMatchCondition(
+                        List.of(
+                            new ArrangementAtomMatchCondition(FIELD),
+                            new ArrangementAtomMatchCondition(STATIC))),
+                    new ArrangementAtomMatchCondition(FIELD),
+                    new ArrangementAtomMatchCondition(CONSTRUCTOR),
+                    new ArrangementAtomMatchCondition(METHOD)
+                };
+
+            assertNotNull(actual);
+            assertDeclarationOrderVisibilityAlias(actual.getRuleAliases().toArray(new StdArrangementRuleAliasToken[0]));
+            assertEquals(0, actual.getGroupings().size());
+            assertDeclarationOrderSectionComments(actual.getSections());
+            assertDeclarationOrderSectionOrderType(actual.getSections());
+            ArrangementMatchCondition[] actualSectionMatchers = actual.getSections().stream()
+                .flatMap(rules -> rules.getMatchRules().stream())
+                .map(rule -> rule.getMatcher().getCondition()).toList().toArray(new ArrangementMatchCondition[0]);
+            Assert.assertArrayEquals(expectedSectionsMatchers, actualSectionMatchers);
+        }
+    }
+
+    private static void assertDeclarationOrderVisibilityAlias(StdArrangementRuleAliasToken[] ruleAliases){
+        Assert.assertArrayEquals(
+            new StdArrangementRuleAliasToken[] {
+                new StdArrangementRuleAliasToken(
+                    "visibility",
+                    List.of(
+                        new StdArrangementMatchRule(new StdArrangementEntryMatcher(new ArrangementAtomMatchCondition(PUBLIC))),
+                        new StdArrangementMatchRule(new StdArrangementEntryMatcher(new ArrangementAtomMatchCondition(PROTECTED))),
+                        new StdArrangementMatchRule(new StdArrangementEntryMatcher(new ArrangementAtomMatchCondition(PACKAGE_PRIVATE))),
+                        new StdArrangementMatchRule(new StdArrangementEntryMatcher(new ArrangementAtomMatchCondition(PRIVATE)))
+                    )
+                )
+            },
+            ruleAliases);
+    }
+
+    private static void assertDeclarationOrderSectionComments(List<ArrangementSectionRule> sectionRules) {
+        sectionRules.forEach(section -> {
+            assertNull(section.getEndComment());
+            assertNull(section.getStartComment());
+        });
+    }
+
+    private static void assertDeclarationOrderSectionOrderType(List<ArrangementSectionRule> sectionRules) {
+        sectionRules.forEach(section ->
+            section.getMatchRules().forEach(matchRule ->
+                assertEquals(matchRule.getOrderType(), ArrangementMatchRule.DEFAULT_ORDER_TYPE)));
+    }
 }
